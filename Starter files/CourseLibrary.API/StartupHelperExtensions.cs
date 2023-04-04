@@ -1,7 +1,9 @@
 ﻿using CourseLibrary.API.DbContexts;
 using CourseLibrary.API.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.SqlServer.Query.Internal;
+using Newtonsoft.Json.Serialization;
 
 namespace CourseLibrary.API;
 
@@ -13,20 +15,59 @@ internal static class StartupHelperExtensions
         builder.Services.AddControllers(configure =>
         {
             configure.ReturnHttpNotAcceptable = true;
-           
-        }).AddXmlDataContractSerializerFormatters();
 
-        builder.Services.AddScoped<ICourseLibraryRepository, 
+        })
+        .AddNewtonsoftJson(setupAction =>
+        {
+            setupAction.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
+        })
+        .AddXmlDataContractSerializerFormatters()
+        .ConfigureApiBehaviorOptions(setupAction =>
+        {
+            setupAction.InvalidModelStateResponseFactory = context =>
+            {
+                // create a validation problem details object
+                var problemDetailsFactory = context.HttpContext.RequestServices
+                .GetRequiredService<ProblemDetailsFactory>();
+
+                var validationProblemDetails = problemDetailsFactory
+                .CreateValidationProblemDetails
+                (
+                    context.HttpContext,
+                    context.ModelState
+                );
+
+                //add additional info not added by Default
+                validationProblemDetails.Detail = "See the errors field for details";
+                validationProblemDetails.Instance = context.HttpContext.Request.Path;
+
+                //report ivalid model state responses as Validation Issues
+                validationProblemDetails.Type = "https://courselibrary.com/modelvalidationproblem";
+                validationProblemDetails.Status = StatusCodes.Status422UnprocessableEntity;
+                validationProblemDetails.Title = "One or more validation errors occured.";
+
+                return new UnprocessableEntityObjectResult(
+                    validationProblemDetails
+                    )
+                {
+                    ContentTypes = { "application/problem+json" }
+                };
+
+
+            };
+        });
+
+        builder.Services.AddScoped<ICourseLibraryRepository,
             CourseLibraryRepository>();
 
 
-        
+
         builder.Services.AddDbContext<CourseLibraryContext>(options =>
         {
             //options.UseSqlite(@"Data Source=library.db");
-        options.UseSqlServer(
-               builder.Configuration.GetConnectionString("DefaultConnection"));
-    });
+            options.UseSqlServer(
+                   builder.Configuration.GetConnectionString("DefaultConnection"));
+        });
 
         builder.Services.AddAutoMapper(
             AppDomain.CurrentDomain.GetAssemblies());
@@ -35,11 +76,11 @@ internal static class StartupHelperExtensions
     }
 
 
- 
+
 
     // Configure the request/response pipelien
     public static WebApplication ConfigurePipeline(this WebApplication app)
-    { 
+    {
         if (app.Environment.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();
@@ -56,12 +97,12 @@ internal static class StartupHelperExtensions
                 });
             });
         }
- 
+
         app.UseAuthorization();
 
-        app.MapControllers(); 
-         
-        return app; 
+        app.MapControllers();
+
+        return app;
     }
 
     public static async Task ResetDatabaseAsync(this WebApplication app)
@@ -82,6 +123,6 @@ internal static class StartupHelperExtensions
                 var logger = scope.ServiceProvider.GetRequiredService<ILogger>();
                 logger.LogError(ex, "An error occurred while migrating the database.");
             }
-        } 
+        }
     }
 }
