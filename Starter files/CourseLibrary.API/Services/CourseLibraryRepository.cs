@@ -1,5 +1,6 @@
 ﻿using CourseLibrary.API.DbContexts;
-using CourseLibrary.API.Entities; 
+using CourseLibrary.API.Entities;
+using CourseLibrary.API.ResourceParameters;
 using Microsoft.EntityFrameworkCore;
 
 namespace CourseLibrary.API.Services;
@@ -147,6 +148,37 @@ public class CourseLibraryRepository : ICourseLibraryRepository
     public async Task<bool> SaveAsync()
     {
         return (await _context.SaveChangesAsync() >= 0);
+    }
+
+    public async Task<IEnumerable<Author>> GetAuthorsAsync(AuthorsResourceParameters authorsResourceParameters)
+    {
+        if(authorsResourceParameters == null)
+        {
+            throw new ArgumentNullException(nameof(authorsResourceParameters));
+        }
+        if (string.IsNullOrWhiteSpace(authorsResourceParameters.MainCategory) && string.IsNullOrWhiteSpace(authorsResourceParameters.SearchQuery))
+        {
+            return await GetAuthorsAsync();
+        }
+
+
+
+        // collection to start from
+        var collection = _context.Authors as IQueryable<Author>;
+
+        if (!string.IsNullOrWhiteSpace(authorsResourceParameters.MainCategory))
+        {
+            var mainCategory = authorsResourceParameters.MainCategory.Trim();
+            collection = collection.Where(a => a.MainCategory == mainCategory);
+        }
+
+        if (!string.IsNullOrWhiteSpace(authorsResourceParameters.SearchQuery))
+        {
+            var searchQuery = authorsResourceParameters.SearchQuery.Trim();
+            collection = collection.Where(a => a.MainCategory.Contains(searchQuery) || a.FirstName.Contains(searchQuery) || a.LastName.Contains(searchQuery));
+
+        }
+        return await collection.ToListAsync();
     }
 }
 
