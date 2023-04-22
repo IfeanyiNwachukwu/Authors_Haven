@@ -3,6 +3,7 @@ using AutoMapper;
 using CourseLibrary.API.Entities;
 using CourseLibrary.API.Models;
 using CourseLibrary.API.Services;
+using Marvin.Cache.Headers;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Diagnostics;
@@ -14,6 +15,9 @@ namespace CourseLibrary.API.Controllers;
 
 [ApiController]
 [Route("api/authors/{authorId}/courses")]
+//[ResponseCache(CacheProfileName = "240SecondsCacheProfile")]
+[HttpCacheExpiration(CacheLocation = CacheLocation.Public)]
+[HttpCacheValidation(MustRevalidate = false)]
 public class CoursesController : ControllerBase
 {
     private readonly ICourseLibraryRepository _courseLibraryRepository;
@@ -28,6 +32,7 @@ public class CoursesController : ControllerBase
             throw new ArgumentNullException(nameof(mapper));
     }
 
+    //[ResponseCache(Duration = 120)]
     [HttpGet(Name = "GetCoursesForAuthor")]
     public async Task<ActionResult<IEnumerable<CourseDto>>> GetCoursesForAuthor(Guid authorId)
     {
@@ -41,6 +46,8 @@ public class CoursesController : ControllerBase
     }
 
     [HttpGet("{courseId}", Name = "GetCourseForAuthor")]
+    [HttpCacheExpiration(CacheLocation = CacheLocation.Public, MaxAge = 1000)]
+    [HttpCacheValidation(MustRevalidate = false)]
     public async Task<ActionResult<CourseDto>> GetCourseForAuthor(Guid authorId, Guid courseId)
     {
         if (!await _courseLibraryRepository.AuthorExistsAsync(authorId))

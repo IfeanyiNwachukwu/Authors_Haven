@@ -1,6 +1,7 @@
 ﻿using CourseLibrary.API.DbContexts;
 using CourseLibrary.API.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Serialization;
@@ -15,6 +16,9 @@ internal static class StartupHelperExtensions
         builder.Services.AddControllers(configure =>
         {
             configure.ReturnHttpNotAcceptable = true;
+
+            // configure a cache profile
+            configure.CacheProfiles.Add("240SecondsCacheProfile", new() { Duration = 240 });
 
         })
         .AddNewtonsoftJson(setupAction =>
@@ -57,6 +61,18 @@ internal static class StartupHelperExtensions
             };
         });
 
+        //configuring custom media tpes
+
+        builder.Services.Configure<MvcOptions>(config =>
+        {
+            var newtonsoftJsonOutputFormatter = config.OutputFormatters.OfType<NewtonsoftJsonOutputFormatter> ()?.FirstOrDefault();
+
+            if(newtonsoftJsonOutputFormatter != null)
+            {
+                newtonsoftJsonOutputFormatter.SupportedMediaTypes.Add("application/vnd.ifeanyi.hateoas+json");
+            }
+        });
+
         builder.Services.AddTransient<IPropertyMappingService, PropertyMappingService>();
 
         builder.Services.AddTransient<IPropertyCheckerService, PropertyCheckerService>();
@@ -76,13 +92,27 @@ internal static class StartupHelperExtensions
         builder.Services.AddAutoMapper(
             AppDomain.CurrentDomain.GetAssemblies());
 
+        builder.Services.AddResponseCaching();
+        // Global Configuration
+        builder.Services.AddHttpCacheHeaders(
+            (expiratioModelOptions) =>
+            {
+                expiratioModelOptions.MaxAge = 60;
+                expiratioModelOptions.CacheLocation = Marvin.Cache.Headers.CacheLocation.Public;
+            },
+            (validationModelOptions) => 
+            {
+                validationModelOptions.MustRevalidate = true;
+            
+            }
+       );
         return builder.Build();
     }
 
 
 
 
-    // Configure the request/response pipelien
+    // Configure the request/response pipeline
     public static WebApplication ConfigurePipeline(this WebApplication app)
     {
         if (app.Environment.IsDevelopment())
@@ -101,6 +131,9 @@ internal static class StartupHelperExtensions
                 });
             });
         }
+        app.UseResponseCaching();
+
+        app.UseHttpCacheHeaders();
 
         app.UseAuthorization();
 
